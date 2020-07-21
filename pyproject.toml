@@ -6,6 +6,9 @@ authors = ["Pedro Romano <pedro@paparomeo.net>"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
+starlette = "^0.13.6"
+uvicorn = "^0.11.6"
+httpx = "^0.13.3"
 
 [tool.poetry.dev-dependencies]
 flake8 = "^3.8.3"
