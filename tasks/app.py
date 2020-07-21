@@ -1,6 +1,10 @@
 from invoke import Collection, task
 
+from . import coverage, test
 from .helpers import get_app_cmd, prun, s
+
+coverage = Collection.from_module(coverage)
+test = Collection.from_module(test)
 
 
 @task
@@ -31,4 +35,4 @@ def run(c, host=None, port=None, reload=False):
     prun(c, cmd, pty=True)
 
 
-collection = Collection("app", install, lint, run)
+collection = Collection("app", coverage, install, lint, run, test)
