@@ -6,15 +6,17 @@ pip=$(bin)/pip
 uvicorn=$(bin)/uvicorn
 coverage=$(bin)/coverage
 
-build:
+.venv:
 	python -m venv .venv
 	$(pip) install --upgrade pip
 	$(pip) install -r requirements-dev.txt
 
-run:
+build: .venv
+
+run: .venv
 	@$(uvicorn) app.main:app --port=$(HTTP_PORT)
 
-test:
+test: .venv
 	@$(coverage) run -m pytest && $(coverage) report
 
 docker:
