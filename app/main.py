@@ -2,25 +2,98 @@
 
 """
 import datetime
+import socket
+import time
+from http import HTTPStatus
 from typing import Any, Dict, List, Tuple
 from urllib.parse import urlunsplit
 
 import httpx
-from starlette.responses import Response
+from starlette.responses import HTMLResponse, PlainTextResponse, Response
 
 from .config import JWT_DEFAULT_USERNAME
 from .jwt import issue_jwt_for_user_and_date
+
+
+class Status:  # pylint: disable=too-few-public-methods
+    """Proxy status.
+
+    """
+
+    startup_time: float = time.time()
+    proxied_requests_count: int = 0
 
 
 async def app(scope: Dict[str, Any], receive: Any, send: Any) -> None:
     """HTTP proxy ASGI application.
 
     """
-    assert scope["type"] == "http"
-    method, url, headers, body = await arguments_from_downstream_request(scope, receive)
-    updated_headers = add_jwt_header(headers)
-    response = await upstream_request(method, url, updated_headers, body)
+    assert scope["type"] in ["lifespan", "http"]
+    if scope["type"] == "lifespan":  # pragma: no cover
+        await send(lifespan_event_handler())
+        return
+    if is_request_for_service(scope):
+        response = service_handler(scope)
+    else:
+        method, url, headers, body = await arguments_from_downstream_request(
+            scope, receive
+        )
+        updated_headers = add_jwt_header(headers)
+        response = await upstream_request(method, url, updated_headers, body)
+        Status.proxied_requests_count += 1
     await response(scope, receive, send)
+
+
+def lifespan_event_handler() -> Dict[str, str]:  # pragma: no cover
+    """Handle lifespan event and return response for ASGI server.
+
+    """
+    Status.startup_time = time.time()
+    Status.proxied_requests_count = 0
+    return {"type": "lifespan.startup.complete"}
+
+
+def is_request_for_service(scope: Dict[str, Any]) -> bool:
+    """Is this a direct request for the service or meant to proxied?
+
+    """
+    host = get_host(scope).decode("utf-8")
+    port = "80"
+    if ":" in host:
+        host, port = host.split(":")
+    try:
+        addrinfo = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        return True
+    return scope["server"] in [info[4] for info in addrinfo]
+
+
+def get_host(scope: Dict[str, Any]) -> bytes:
+    """Extract the request host from the scope's headers.
+
+    """
+    return bytes(dict(scope["headers"])[b"host"])
+
+
+def service_handler(scope: Dict[str, Any]) -> Response:
+    """Handle requests directly for the service.
+
+    """
+    if scope["path"] == "/status":
+        elapsed_time = round(time.time() - Status.startup_time, 3)
+        return HTMLResponse(
+            f"""
+<html>
+  <body>
+    <h1>Seconds since startup: {elapsed_time}</h1>
+    <h1>Proxied requests count: {Status.proxied_requests_count}</h1>
+  </body>
+</html>
+""".strip()
+        )
+    return PlainTextResponse(
+        HTTPStatus.NOT_FOUND.phrase, status_code=HTTPStatus.NOT_FOUND
+    )
 
 
 async def arguments_from_downstream_request(

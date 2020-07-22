@@ -10,7 +10,7 @@ def prun(c, cmd, **kwargs):
 
 
 def get_app_cmd(host, port, reload=False):
-    cmd = ["uvicorn", "--lifespan=off"]
+    cmd = ["uvicorn"]
     if host is not None:
         cmd.append(f"--host={host}")
     if port is not None:
