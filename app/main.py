@@ -1,11 +1,15 @@
 """Starlette based proxy.
 
 """
+import datetime
 from typing import Any, Dict, List, Tuple
 from urllib.parse import urlunsplit
 
 import httpx
 from starlette.responses import Response
+
+from .config import JWT_DEFAULT_USERNAME
+from .jwt import issue_jwt_for_user_and_date
 
 
 async def app(scope: Dict[str, Any], receive: Any, send: Any) -> None:
@@ -14,7 +18,8 @@ async def app(scope: Dict[str, Any], receive: Any, send: Any) -> None:
     """
     assert scope["type"] == "http"
     method, url, headers, body = await arguments_from_downstream_request(scope, receive)
-    response = await upstream_request(method, url, headers, body)
+    updated_headers = add_jwt_header(headers)
+    response = await upstream_request(method, url, updated_headers, body)
     await response(scope, receive, send)
 
 
@@ -51,6 +56,19 @@ def upstream_url_from_scope(scope: Dict[str, Any]) -> str:
             b"",
         )
     ).decode("utf-8")
+
+
+def add_jwt_header(headers: List[Tuple[bytes, bytes]]) -> List[Tuple[bytes, bytes]]:
+    """Return a copy of headers with the addition of the x-my-jwt header.
+
+    """
+    user = (
+        dict(headers)
+        .get(b"username", JWT_DEFAULT_USERNAME.encode("utf-8"))
+        .decode("utf-8")
+    )
+    jwt = issue_jwt_for_user_and_date(user, datetime.date.today())
+    return [*headers, (b"x-my-jwt", jwt)]
 
 
 async def upstream_request(
