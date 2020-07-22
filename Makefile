@@ -1,4 +1,5 @@
 HTTP_PORT ?= 8080
+WORKERS ?= ""
 
 bin=.venv/bin
 pip=$(bin)/pip
@@ -15,3 +16,6 @@ run:
 
 test:
 	@$(coverage) run -m pytest && $(coverage) report
+
+docker:
+	@HTTP_PORT=$(HTTP_PORT) WORKERS=${WORKERS} docker-compose up app
